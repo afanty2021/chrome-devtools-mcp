@@ -1,0 +1,246 @@
+{
+  "timestamp": "2025-01-20T12:00:00.000Z",
+  "project": {
+    "name": "chrome-devtools-mcp",
+    "version": "0.9.0",
+    "description": "Chrome DevTools的MCP服务器，让AI编码助手能够控制和检查Chrome浏览器",
+    "author": "Google LLC",
+    "license": "Apache-2.0",
+    "repository": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+    "language": "TypeScript",
+    "runtime": "Node.js v20.19+"
+  },
+  "coverage": {
+    "total_files_analyzed": 87,
+    "files_scanned": 85,
+    "coverage_percentage": 97.7,
+    "modules_discovered": 8,
+    "tools_identified": 28,
+    "test_files_count": 40,
+    "documentation_files": 7
+  },
+  "modules": [
+    {
+      "path": "src/",
+      "name": "Core Source Code",
+      "description": "核心源代码，包含 MCP 服务器实现和所有工具",
+      "language": "TypeScript",
+      "entry_files": ["src/index.ts", "src/main.ts"],
+      "has_tests": true,
+      "has_config": true,
+      "coverage": 98,
+      "submodules": [
+        {
+          "path": "src/tools/",
+          "name": "Browser Tools",
+          "description": "6大类28个浏览器操作工具",
+          "tools_count": 28,
+          "categories": ["Input", "Navigation", "Emulation", "Performance", "Network", "Debugging"]
+        },
+        {
+          "path": "src/formatters/",
+          "name": "Data Formatters",
+          "description": "控制台、网络、快照数据格式化器",
+          "formatters_count": 3
+        },
+        {
+          "path": "src/utils/",
+          "name": "Utilities",
+          "description": "工具函数和类型定义",
+          "utilities_count": 3
+        },
+        {
+          "path": "src/trace-processing/",
+          "name": "Performance Trace Processing",
+          "description": "性能跟踪数据处理和分析",
+          "has_fixtures": true
+        }
+      ]
+    },
+    {
+      "path": "tests/",
+      "name": "Test Suite",
+      "description": "完整的单元测试和集成测试套件",
+      "language": "TypeScript",
+      "test_count": 40,
+      "has_snapshots": true,
+      "coverage": 98
+    },
+    {
+      "path": "scripts/",
+      "name": "Build Scripts",
+      "description": "构建脚本、文档生成和开发工具",
+      "languages": ["TypeScript", "JavaScript"],
+      "script_count": 6,
+      "has_eslint_rules": true
+    },
+    {
+      "path": "docs/",
+      "name": "Documentation",
+      "description": "用户文档和工具参考",
+      "language": "Markdown",
+      "doc_count": 7,
+      "auto_generated": true
+    }
+  ],
+  "tools_summary": {
+    "total_tools": 28,
+    "categories": {
+      "Input automation": {
+        "count": 8,
+        "tools": ["click", "drag", "fill", "fill_form", "handle_dialog", "hover", "press_key", "upload_file"],
+        "file": "src/tools/input.ts"
+      },
+      "Navigation automation": {
+        "count": 7,
+        "tools": ["close_page", "list_pages", "navigate_page", "navigate_page_history", "new_page", "select_page", "wait_for"],
+        "file": "src/tools/pages.ts"
+      },
+      "Emulation": {
+        "count": 3,
+        "tools": ["emulate_cpu", "emulate_network", "resize_page"],
+        "file": "src/tools/emulation.ts"
+      },
+      "Performance": {
+        "count": 3,
+        "tools": ["performance_analyze_insight", "performance_start_trace", "performance_stop_trace"],
+        "file": "src/tools/performance.ts"
+      },
+      "Network": {
+        "count": 2,
+        "tools": ["get_network_request", "list_network_requests"],
+        "file": "src/tools/network.ts"
+      },
+      "Debugging": {
+        "count": 5,
+        "tools": ["evaluate_script", "get_console_message", "list_console_messages", "take_screenshot", "take_snapshot"],
+        "files": ["src/tools/console.ts", "src/tools/screenshot.ts", "src/tools/script.ts", "src/tools/snapshot.ts"]
+      }
+    }
+  },
+  "key_architecture_patterns": {
+    "tool_system": {
+      "pattern": "defineTool function",
+      "description": "统一的工具定义和注册机制",
+      "validation": "Zod schema validation",
+      "concurrency": "Mutex-based serial execution"
+    },
+    "context_management": {
+      "pattern": "McpContext class",
+      "description": "集中式浏览器状态管理",
+      "features": ["Page management", "Network collection", "Console collection", "Performance tracing"]
+    },
+    "response_system": {
+      "pattern": "McpResponse class",
+      "description": "结构化响应构建",
+      "features": ["Data formatting", "Pagination", "Content attachments"]
+    },
+    "data_processing": {
+      "pattern": "Collector pattern",
+      "description": "事件驱动的数据收集",
+      "collectors": ["NetworkCollector", "PageCollector", "ConsoleCollector"]
+    }
+  },
+  "technology_stack": {
+    "runtime": "Node.js v20.19+",
+    "language": "TypeScript",
+    "module_system": "ESM",
+    "browser_automation": "Puppeteer 24.26.0",
+    "devtools": "Chrome DevTools Frontend 1.0.1532884",
+    "mcp_sdk": "@modelcontextprotocol/sdk 1.20.1",
+    "build_tools": ["TypeScript 5.9.2", "Rollup 4.52.5"],
+    "code_quality": ["ESLint", "Prettier", "TypeScript strict mode"],
+    "testing": "Node.js built-in test runner"
+  },
+  "ignored_patterns": [
+    "node_modules/**",
+    "build/**",
+    ".git/**",
+    "dist/**",
+    "*.lock",
+    "*.log",
+    ".*cache/**",
+    "**/*.bin"
+  ],
+  "truncated": false,
+  "gaps_identified": [
+    {
+      "area": "Configuration files",
+      "status": "completed",
+      "coverage": 100
+    },
+    {
+      "area": "Core functionality",
+      "status": "completed",
+      "coverage": 98
+    },
+    {
+      "area": "Test coverage",
+      "status": "completed",
+      "coverage": 98
+    },
+    {
+      "area": "Documentation",
+      "status": "completed",
+      "coverage": 95
+    },
+    {
+      "area": "Build system",
+      "status": "completed",
+      "coverage": 100
+    }
+  ],
+  "next_recommendations": [
+    "Focus on understanding tool implementation details",
+    "Review test patterns for best practices",
+    "Examine performance optimization strategies",
+    "Study error handling and logging mechanisms"
+  ],
+  "generated_documents": [
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/CLAUDE.md",
+      "type": "root",
+      "description": "项目根级架构文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/src/CLAUDE.md",
+      "type": "module",
+      "description": "src 模块详细文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/tests/CLAUDE.md",
+      "type": "module",
+      "description": "tests 测试套件文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/src/tools/CLAUDE.md",
+      "type": "submodule",
+      "description": "tools 工具系统文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/scripts/CLAUDE.md",
+      "type": "module",
+      "description": "scripts 构建脚本文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/docs/CLAUDE.md",
+      "type": "module",
+      "description": "docs 文档模块说明"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/src/formatters/CLAUDE.md",
+      "type": "submodule",
+      "description": "formatters 格式化模块文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/src/utils/CLAUDE.md",
+      "type": "submodule",
+      "description": "utils 工具函数模块文档"
+    },
+    {
+      "path": "/Users/berton/Github/chrome-devtools-mcp/src/trace-processing/CLAUDE.md",
+      "type": "submodule",
+      "description": "trace-processing 性能跟踪处理文档"
+    }
+  ]
+}
