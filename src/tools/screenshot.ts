@@ -15,7 +15,8 @@ export const screenshot = defineTool({
   description: `Take a screenshot of the page or element.`,
   annotations: {
     category: ToolCategory.DEBUGGING,
-    readOnlyHint: true,
+    // Not read-only due to filePath param.
+    readOnlyHint: false,
   },
   schema: {
     format: zod
@@ -61,10 +62,13 @@ export const screenshot = defineTool({
       pageOrHandle = context.getSelectedPage();
     }
 
+    const format = request.params.format;
+    const quality = format === 'png' ? undefined : request.params.quality;
+
     const screenshot = await pageOrHandle.screenshot({
-      type: request.params.format,
+      type: format,
       fullPage: request.params.fullPage,
-      quality: request.params.quality,
+      quality,
       optimizeForSpeed: true, // Bonus: optimize encoding for speed
     });
 

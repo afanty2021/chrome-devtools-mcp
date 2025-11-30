@@ -3,20 +3,21 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {emulateCpu, emulateNetwork} from '../../src/tools/emulation.js';
-import {withBrowser} from '../utils.js';
+import {emulate} from '../../src/tools/emulation.js';
+import {withMcpContext} from '../utils.js';
 
 describe('emulation', () => {
   describe('network', () => {
     it('emulates offline network conditions', async () => {
-      await withBrowser(async (response, context) => {
-        await emulateNetwork.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingOption: 'Offline',
+              networkConditions: 'Offline',
             },
           },
           response,
@@ -26,12 +27,12 @@ describe('emulation', () => {
         assert.strictEqual(context.getNetworkConditions(), 'Offline');
       });
     });
-    it('emulates network throttling when the throttling option is valid ', async () => {
-      await withBrowser(async (response, context) => {
-        await emulateNetwork.handler(
+    it('emulates network throttling when the throttling option is valid', async () => {
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingOption: 'Slow 3G',
+              networkConditions: 'Slow 3G',
             },
           },
           response,
@@ -43,11 +44,11 @@ describe('emulation', () => {
     });
 
     it('disables network emulation', async () => {
-      await withBrowser(async (response, context) => {
-        await emulateNetwork.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingOption: 'No emulation',
+              networkConditions: 'No emulation',
             },
           },
           response,
@@ -59,11 +60,11 @@ describe('emulation', () => {
     });
 
     it('does not set throttling when the network throttling is not one of the predefined options', async () => {
-      await withBrowser(async (response, context) => {
-        await emulateNetwork.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingOption: 'Slow 11G',
+              networkConditions: 'Slow 11G',
             },
           },
           response,
@@ -75,12 +76,11 @@ describe('emulation', () => {
     });
 
     it('report correctly for the currently selected page', async () => {
-      await withBrowser(async (response, context) => {
-        await context.newPage();
-        await emulateNetwork.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingOption: 'Slow 3G',
+              networkConditions: 'Slow 3G',
             },
           },
           response,
@@ -89,7 +89,8 @@ describe('emulation', () => {
 
         assert.strictEqual(context.getNetworkConditions(), 'Slow 3G');
 
-        context.setSelectedPageIdx(0);
+        const page = await context.newPage();
+        context.selectPage(page);
 
         assert.strictEqual(context.getNetworkConditions(), null);
       });
@@ -98,11 +99,11 @@ describe('emulation', () => {
 
   describe('cpu', () => {
     it('emulates cpu throttling when the rate is valid (1-20x)', async () => {
-      await withBrowser(async (response, context) => {
-        await emulateCpu.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingRate: 4,
+              cpuThrottlingRate: 4,
             },
           },
           response,
@@ -114,12 +115,12 @@ describe('emulation', () => {
     });
 
     it('disables cpu throttling', async () => {
-      await withBrowser(async (response, context) => {
+      await withMcpContext(async (response, context) => {
         context.setCpuThrottlingRate(4); // Set it to something first.
-        await emulateCpu.handler(
+        await emulate.handler(
           {
             params: {
-              throttlingRate: 1,
+              cpuThrottlingRate: 1,
             },
           },
           response,
@@ -131,12 +132,11 @@ describe('emulation', () => {
     });
 
     it('report correctly for the currently selected page', async () => {
-      await withBrowser(async (response, context) => {
-        await context.newPage();
-        await emulateCpu.handler(
+      await withMcpContext(async (response, context) => {
+        await emulate.handler(
           {
             params: {
-              throttlingRate: 4,
+              cpuThrottlingRate: 4,
             },
           },
           response,
@@ -145,7 +145,8 @@ describe('emulation', () => {
 
         assert.strictEqual(context.getCpuThrottlingRate(), 4);
 
-        context.setSelectedPageIdx(0);
+        const page = await context.newPage();
+        context.selectPage(page);
 
         assert.strictEqual(context.getCpuThrottlingRate(), 1);
       });

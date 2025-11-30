@@ -3,22 +3,43 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
-import type {TextSnapshotNode} from '../McpContext.js';
 
-export function formatA11ySnapshot(
-  serializedAXNodeRoot: TextSnapshotNode,
+import type {TextSnapshot, TextSnapshotNode} from '../McpContext.js';
+
+export function formatSnapshotNode(
+  root: TextSnapshotNode,
+  snapshot?: TextSnapshot,
   depth = 0,
 ): string {
-  let result = '';
-  const attributes = getAttributes(serializedAXNodeRoot);
-  const line = ' '.repeat(depth * 2) + attributes.join(' ') + '\n';
-  result += line;
+  const chunks: string[] = [];
 
-  for (const child of serializedAXNodeRoot.children) {
-    result += formatA11ySnapshot(child, depth + 1);
+  if (depth === 0) {
+    // Top-level content of the snapshot.
+    if (
+      snapshot?.verbose &&
+      snapshot?.hasSelectedElement &&
+      !snapshot.selectedElementUid
+    ) {
+      chunks.push(`Note: there is a selected element in the DevTools Elements panel but it is not included into the current a11y tree snapshot.
+Get a verbose snapshot to include all elements if you are interested in the selected element.\n\n`);
+    }
   }
 
-  return result;
+  const attributes = getAttributes(root);
+  const line =
+    ' '.repeat(depth * 2) +
+    attributes.join(' ') +
+    (root.id === snapshot?.selectedElementUid
+      ? ' [selected in the DevTools Elements panel]'
+      : '') +
+    '\n';
+  chunks.push(line);
+
+  for (const child of root.children) {
+    chunks.push(formatSnapshotNode(child, snapshot, depth + 1));
+  }
+
+  return chunks.join('');
 }
 
 function getAttributes(serializedAXNodeRoot: TextSnapshotNode): string[] {
@@ -35,7 +56,14 @@ function getAttributes(serializedAXNodeRoot: TextSnapshotNode): string[] {
     attributes.push(`"${serializedAXNodeRoot.name}"`);
   }
 
-  const excluded = new Set(['id', 'role', 'name', 'elementHandle', 'children']);
+  const excluded = new Set([
+    'id',
+    'role',
+    'name',
+    'elementHandle',
+    'children',
+    'backendNodeId',
+  ]);
 
   const booleanPropertyMap: Record<string, string> = {
     disabled: 'disableable',

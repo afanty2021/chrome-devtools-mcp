@@ -3,6 +3,10 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import {AggregatedIssue} from '../node_modules/chrome-devtools-frontend/mcp/mcp.js';
+
+import {mapIssueToMessageObject} from './DevtoolsUtils.js';
 import type {ConsoleMessageData} from './formatters/consoleFormatter.js';
 import {
   formatConsoleEventShort,
@@ -15,7 +19,7 @@ import {
   getShortDescriptionForRequest,
   getStatusFromRequest,
 } from './formatters/networkFormatter.js';
-import {formatA11ySnapshot} from './formatters/snapshotFormatter.js';
+import {formatSnapshotNode} from './formatters/snapshotFormatter.js';
 import type {McpContext} from './McpContext.js';
 import type {
   ConsoleMessage,
@@ -24,14 +28,18 @@ import type {
   TextContent,
 } from './third_party/index.js';
 import {handleDialog} from './tools/pages.js';
-import type {ImageContentData, Response} from './tools/ToolDefinition.js';
+import type {
+  DevToolsData,
+  ImageContentData,
+  Response,
+  SnapshotParams,
+} from './tools/ToolDefinition.js';
 import {paginate} from './utils/pagination.js';
 import type {PaginationOptions} from './utils/types.js';
 
 export class McpResponse implements Response {
   #includePages = false;
-  #includeSnapshot = false;
-  #includeVerboseSnapshot = false;
+  #snapshotParams?: SnapshotParams;
   #attachedNetworkRequestId?: number;
   #attachedConsoleMessageId?: number;
   #textResponseLines: string[] = [];
@@ -41,6 +49,7 @@ export class McpResponse implements Response {
     pagination?: PaginationOptions;
     resourceTypes?: ResourceType[];
     includePreservedRequests?: boolean;
+    networkRequestIdInDevToolsUI?: number;
   };
   #consoleDataOptions?: {
     include: boolean;
@@ -48,14 +57,20 @@ export class McpResponse implements Response {
     types?: string[];
     includePreservedMessages?: boolean;
   };
+  #devToolsData?: DevToolsData;
+
+  attachDevToolsData(data: DevToolsData): void {
+    this.#devToolsData = data;
+  }
 
   setIncludePages(value: boolean): void {
     this.#includePages = value;
   }
 
-  setIncludeSnapshot(value: boolean, verbose = false): void {
-    this.#includeSnapshot = value;
-    this.#includeVerboseSnapshot = verbose;
+  includeSnapshot(params?: SnapshotParams): void {
+    this.#snapshotParams = params ?? {
+      verbose: false,
+    };
   }
 
   setIncludeNetworkRequests(
@@ -63,6 +78,7 @@ export class McpResponse implements Response {
     options?: PaginationOptions & {
       resourceTypes?: ResourceType[];
       includePreservedRequests?: boolean;
+      networkRequestIdInDevToolsUI?: number;
     },
   ): void {
     if (!value) {
@@ -81,6 +97,7 @@ export class McpResponse implements Response {
           : undefined,
       resourceTypes: options?.resourceTypes,
       includePreservedRequests: options?.includePreservedRequests,
+      networkRequestIdInDevToolsUI: options?.networkRequestIdInDevToolsUI,
     };
   }
 
@@ -158,12 +175,8 @@ export class McpResponse implements Response {
     return this.#images;
   }
 
-  get includeSnapshot(): boolean {
-    return this.#includeSnapshot;
-  }
-
-  get includeVersboseSnapshot(): boolean {
-    return this.#includeVerboseSnapshot;
+  get snapshotParams(): SnapshotParams | undefined {
+    return this.#snapshotParams;
   }
 
   async handle(
@@ -173,8 +186,27 @@ export class McpResponse implements Response {
     if (this.#includePages) {
       await context.createPagesSnapshot();
     }
-    if (this.#includeSnapshot) {
-      await context.createTextSnapshot(this.#includeVerboseSnapshot);
+
+    let formattedSnapshot: string | undefined;
+    if (this.#snapshotParams) {
+      await context.createTextSnapshot(
+        this.#snapshotParams.verbose,
+        this.#devToolsData,
+      );
+      const snapshot = context.getTextSnapshot();
+      if (snapshot) {
+        if (this.#snapshotParams.filePath) {
+          await context.saveFile(
+            new TextEncoder().encode(
+              formatSnapshotNode(snapshot.root, snapshot),
+            ),
+            this.#snapshotParams.filePath,
+          );
+          formattedSnapshot = `Saved snapshot to ${this.#snapshotParams.filePath}.`;
+        } else {
+          formattedSnapshot = formatSnapshotNode(snapshot.root, snapshot);
+        }
+      }
     }
 
     const bodies: {
@@ -219,6 +251,16 @@ export class McpResponse implements Response {
             }),
           ),
         };
+      } else if (message instanceof AggregatedIssue) {
+        const mappedIssueMessage = mapIssueToMessageObject(message);
+        if (!mappedIssueMessage)
+          throw new Error(
+            "Can't provide detals for the msgid " + consoleMessageStableId,
+          );
+        consoleData = {
+          consoleMessageStableId,
+          ...mappedIssueMessage,
+        };
       } else {
         consoleData = {
           consoleMessageStableId,
@@ -241,46 +283,60 @@ export class McpResponse implements Response {
           if ('type' in message) {
             return normalizedTypes.has(message.type());
           }
+          if (message instanceof AggregatedIssue) {
+            return normalizedTypes.has('issue');
+          }
           return normalizedTypes.has('error');
         });
       }
 
-      consoleListData = await Promise.all(
-        messages.map(async (item): Promise<ConsoleMessageData> => {
-          const consoleMessageStableId =
-            context.getConsoleMessageStableId(item);
-          if ('args' in item) {
-            const consoleMessage = item as ConsoleMessage;
+      consoleListData = (
+        await Promise.all(
+          messages.map(async (item): Promise<ConsoleMessageData | null> => {
+            const consoleMessageStableId =
+              context.getConsoleMessageStableId(item);
+            if ('args' in item) {
+              const consoleMessage = item as ConsoleMessage;
+              return {
+                consoleMessageStableId,
+                type: consoleMessage.type(),
+                message: consoleMessage.text(),
+                args: await Promise.all(
+                  consoleMessage.args().map(async arg => {
+                    const stringArg = await arg.jsonValue().catch(() => {
+                      // Ignore errors.
+                    });
+                    return typeof stringArg === 'object'
+                      ? JSON.stringify(stringArg)
+                      : String(stringArg);
+                  }),
+                ),
+              };
+            }
+            if (item instanceof AggregatedIssue) {
+              const mappedIssueMessage = mapIssueToMessageObject(item);
+              if (!mappedIssueMessage) return null;
+              return {
+                consoleMessageStableId,
+                ...mappedIssueMessage,
+              };
+            }
             return {
               consoleMessageStableId,
-              type: consoleMessage.type(),
-              message: consoleMessage.text(),
-              args: await Promise.all(
-                consoleMessage.args().map(async arg => {
-                  const stringArg = await arg.jsonValue().catch(() => {
-                    // Ignore errors.
-                  });
-                  return typeof stringArg === 'object'
-                    ? JSON.stringify(stringArg)
-                    : String(stringArg);
-                }),
-              ),
+              type: 'error',
+              message: (item as Error).message,
+              args: [],
             };
-          }
-          return {
-            consoleMessageStableId,
-            type: 'error',
-            message: (item as Error).message,
-            args: [],
-          };
-        }),
-      );
+          }),
+        )
+      ).filter(item => item !== null);
     }
 
     return this.format(toolName, context, {
       bodies,
       consoleData,
       consoleListData,
+      formattedSnapshot,
     });
   }
 
@@ -294,6 +350,7 @@ export class McpResponse implements Response {
       };
       consoleData: ConsoleMessageData | undefined;
       consoleListData: ConsoleMessageData[] | undefined;
+      formattedSnapshot: string | undefined;
     },
   ): Array<TextContent | ImageContent> {
     const response = [`# ${toolName} response`];
@@ -332,24 +389,20 @@ Call ${handleDialog.name} to handle it before continuing.`);
       let idx = 0;
       for (const page of context.getPages()) {
         parts.push(
-          `${idx}: ${page.url()}${idx === context.getSelectedPageIdx() ? ' [selected]' : ''}`,
+          `${idx}: ${page.url()}${context.isPageSelected(page) ? ' [selected]' : ''}`,
         );
         idx++;
       }
       response.push(...parts);
     }
 
-    if (this.#includeSnapshot) {
-      const snapshot = context.getTextSnapshot();
-      if (snapshot) {
-        const formattedSnapshot = formatA11ySnapshot(snapshot.root);
-        response.push('## Page content');
-        response.push(formattedSnapshot);
-      }
+    if (data.formattedSnapshot) {
+      response.push('## Latest page snapshot');
+      response.push(data.formattedSnapshot);
     }
 
     response.push(...this.#formatNetworkRequestData(context, data.bodies));
-    response.push(...this.#formatConsoleData(data.consoleData));
+    response.push(...this.#formatConsoleData(context, data.consoleData));
 
     if (this.#networkRequestsOptions?.include) {
       let requests = context.getNetworkRequests(
@@ -379,6 +432,8 @@ Call ${handleDialog.name} to handle it before continuing.`);
             getShortDescriptionForRequest(
               request,
               context.getNetworkRequestStableId(request),
+              context.getNetworkRequestStableId(request) ===
+                this.#networkRequestsOptions?.networkRequestIdInDevToolsUI,
             ),
           );
         }
@@ -445,13 +500,16 @@ Call ${handleDialog.name} to handle it before continuing.`);
     };
   }
 
-  #formatConsoleData(data: ConsoleMessageData | undefined): string[] {
+  #formatConsoleData(
+    context: McpContext,
+    data: ConsoleMessageData | undefined,
+  ): string[] {
     const response: string[] = [];
     if (!data) {
       return response;
     }
 
-    response.push(formatConsoleEventVerbose(data));
+    response.push(formatConsoleEventVerbose(data, context));
     return response;
   }
 

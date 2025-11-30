@@ -64,6 +64,32 @@ amp mcp add chrome-devtools -- npx chrome-devtools-mcp@latest
 </details>
 
 <details>
+  <summary>Antigravity</summary>
+
+To use the Chrome DevTools MCP server follow the instructions from <a href="https://antigravity.google/docs/mcp">Antigravity's docs<a/> to install a custom MCP server. Add the following config to the MCP servers config:
+
+```bash
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "chrome-devtools-mcp@latest",
+        "--browser-url=http://127.0.0.1:9222",
+        "-y"
+      ]
+    }
+  }
+}
+```
+
+This will make the Chrome DevTools MCP server automatically connect to the browser that Antigravity is using. If you are not using port 9222, make sure to adjust accordingly.
+
+Chrome DevTools MCP will not start the browser instance automatically using this approach as as the Chrome DevTools MCP server runs in Antigravity's built-in browser. If the browser is not already running, you have to start it first by clicking the Chrome icon at the top right corner.
+
+</details>
+
+<details>
   <summary>Claude Code</summary>
     Use the Claude Code CLI to add the Chrome DevTools MCP server (<a href="https://docs.anthropic.com/en/docs/claude-code/mcp">guide</a>):
 
@@ -153,6 +179,16 @@ Go to `Cursor Settings` -> `MCP` -> `New MCP Server`. Use the config provided ab
 </details>
 
 <details>
+  <summary>Factory CLI</summary>
+Use the Factory CLI to add the Chrome DevTools MCP server (<a href="https://docs.factory.ai/cli/configuration/mcp">guide</a>):
+
+```bash
+droid mcp add chrome-devtools "npx -y chrome-devtools-mcp@latest"
+```
+
+</details>
+
+<details>
   <summary>Gemini CLI</summary>
 Install the Chrome DevTools MCP server using the Gemini CLI.
 
@@ -219,6 +255,12 @@ Go to `Settings | AI | Manage MCP Servers` -> `+ Add` to [add an MCP Server](htt
 
 </details>
 
+<details>
+  <summary>Windsurf</summary>
+  Follow the <a href="https://docs.windsurf.com/windsurf/cascade/mcp#mcp-config-json">configure MCP guide</a>
+  using the standard config from above.
+</details>
+
 ### Your first prompt
 
 Enter the following prompt in your MCP Client to check if everything is working:
@@ -247,17 +289,15 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`hover`](docs/tool-reference.md#hover)
   - [`press_key`](docs/tool-reference.md#press_key)
   - [`upload_file`](docs/tool-reference.md#upload_file)
-- **Navigation automation** (7 tools)
+- **Navigation automation** (6 tools)
   - [`close_page`](docs/tool-reference.md#close_page)
   - [`list_pages`](docs/tool-reference.md#list_pages)
   - [`navigate_page`](docs/tool-reference.md#navigate_page)
-  - [`navigate_page_history`](docs/tool-reference.md#navigate_page_history)
   - [`new_page`](docs/tool-reference.md#new_page)
   - [`select_page`](docs/tool-reference.md#select_page)
   - [`wait_for`](docs/tool-reference.md#wait_for)
-- **Emulation** (3 tools)
-  - [`emulate_cpu`](docs/tool-reference.md#emulate_cpu)
-  - [`emulate_network`](docs/tool-reference.md#emulate_network)
+- **Emulation** (2 tools)
+  - [`emulate`](docs/tool-reference.md#emulate)
   - [`resize_page`](docs/tool-reference.md#resize_page)
 - **Performance** (3 tools)
   - [`performance_analyze_insight`](docs/tool-reference.md#performance_analyze_insight)
@@ -303,9 +343,12 @@ The Chrome DevTools MCP server supports the following configuration option:
   - **Type:** string
 
 - **`--isolated`**
-  If specified, creates a temporary user-data-dir that is automatically cleaned up after the browser is closed.
+  If specified, creates a temporary user-data-dir that is automatically cleaned up after the browser is closed. Defaults to false.
   - **Type:** boolean
-  - **Default:** `false`
+
+- **`--userDataDir`**
+  Path to the user data directory for Chrome. Default is $HOME/.cache/chrome-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE
+  - **Type:** string
 
 - **`--channel`**
   Specify a different Chrome channel that should be used. The default is the stable channel version.
@@ -333,17 +376,17 @@ The Chrome DevTools MCP server supports the following configuration option:
   - **Type:** array
 
 - **`--categoryEmulation`**
-  Set to false to exlcude tools related to emulation.
+  Set to false to exclude tools related to emulation.
   - **Type:** boolean
   - **Default:** `true`
 
 - **`--categoryPerformance`**
-  Set to false to exlcude tools related to performance.
+  Set to false to exclude tools related to performance.
   - **Type:** boolean
   - **Default:** `true`
 
 - **`--categoryNetwork`**
-  Set to false to exlcude tools related to network.
+  Set to false to exclude tools related to network.
   - **Type:** boolean
   - **Default:** `true`
 

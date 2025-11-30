@@ -11,17 +11,15 @@
   - [`hover`](#hover)
   - [`press_key`](#press_key)
   - [`upload_file`](#upload_file)
-- **[Navigation automation](#navigation-automation)** (7 tools)
+- **[Navigation automation](#navigation-automation)** (6 tools)
   - [`close_page`](#close_page)
   - [`list_pages`](#list_pages)
   - [`navigate_page`](#navigate_page)
-  - [`navigate_page_history`](#navigate_page_history)
   - [`new_page`](#new_page)
   - [`select_page`](#select_page)
   - [`wait_for`](#wait_for)
-- **[Emulation](#emulation)** (3 tools)
-  - [`emulate_cpu`](#emulate_cpu)
-  - [`emulate_network`](#emulate_network)
+- **[Emulation](#emulation)** (2 tools)
+  - [`emulate`](#emulate)
   - [`resize_page`](#resize_page)
 - **[Performance](#performance)** (3 tools)
   - [`performance_analyze_insight`](#performance_analyze_insight)
@@ -150,19 +148,10 @@
 
 **Parameters:**
 
+- **ignoreCache** (boolean) _(optional)_: Whether to ignore cache on reload.
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds. If set to 0, the default timeout will be used.
-- **url** (string) **(required)**: URL to navigate the page to
-
----
-
-### `navigate_page_history`
-
-**Description:** Navigates the currently selected page.
-
-**Parameters:**
-
-- **navigate** (enum: "back", "forward") **(required)**: Whether to navigate back or navigate forward in the selected pages history
-- **timeout** (integer) _(optional)_: Maximum wait time in milliseconds. If set to 0, the default timeout will be used.
+- **type** (enum: "url", "back", "forward", "reload") _(optional)_: Navigate the page by URL, back or forward in history, or reload.
+- **url** (string) _(optional)_: Target URL (only type=url)
 
 ---
 
@@ -200,23 +189,14 @@
 
 ## Emulation
 
-### `emulate_cpu`
+### `emulate`
 
-**Description:** Emulates CPU throttling by slowing down the selected page's execution.
-
-**Parameters:**
-
-- **throttlingRate** (number) **(required)**: The CPU throttling rate representing the slowdown factor 1-20x. Set the rate to 1 to disable throttling
-
----
-
-### `emulate_network`
-
-**Description:** Emulates network conditions such as throttling or offline mode on the selected page.
+**Description:** Emulates various features on the selected page.
 
 **Parameters:**
 
-- **throttlingOption** (enum: "No emulation", "Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G") **(required)**: The network throttling option to emulate. Available throttling options are: No emulation, Offline, Slow 3G, Fast 3G, Slow 4G, Fast 4G. Set to "No emulation" to disable. Set to "Offline" to simulate offline network conditions.
+- **cpuThrottlingRate** (number) _(optional)_: Represents the CPU slowdown factor. Set the rate to 1 to disable throttling. If omitted, throttling remains unchanged.
+- **networkConditions** (enum: "No emulation", "Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G") _(optional)_: Throttle network. Set to "No emulation" to disable. If omitted, conditions remain unchanged.
 
 ---
 
@@ -235,11 +215,12 @@
 
 ### `performance_analyze_insight`
 
-**Description:** Provides more detailed information on a specific Performance Insight that was highlighted in the results of a trace recording.
+**Description:** Provides more detailed information on a specific Performance Insight of an insight set that was highlighted in the results of a trace recording.
 
 **Parameters:**
 
 - **insightName** (string) **(required)**: The name of the Insight you want more information on. For example: "DocumentLatency" or "LCPBreakdown"
+- **insightSetId** (string) **(required)**: The id for the specific insight set. Only use the ids given in the "Available insight sets" list.
 
 ---
 
@@ -266,11 +247,11 @@
 
 ### `get_network_request`
 
-**Description:** Gets a network request by URL. You can get all requests by calling [`list_network_requests`](#list_network_requests).
+**Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.
 
 **Parameters:**
 
-- **reqid** (number) **(required)**: The reqid of a request on the page from the listed network requests
+- **reqid** (number) _(optional)_: The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.
 
 ---
 
@@ -349,10 +330,12 @@ so returned values have to JSON-serializable.
 ### `take_snapshot`
 
 **Description:** Take a text snapshot of the currently selected page based on the a11y tree. The snapshot lists page elements along with a unique
-identifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot.
+identifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected
+in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.
 - **verbose** (boolean) _(optional)_: Whether to include all possible information available in the full a11y tree. Default is false.
 
 ---

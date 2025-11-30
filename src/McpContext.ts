@@ -3,12 +3,16 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import {type AggregatedIssue} from '../node_modules/chrome-devtools-frontend/mcp/mcp.js';
+
+import {extractUrlLikeFromDevToolsTitle, urlsEqual} from './DevtoolsUtils.js';
 import type {ListenerMap} from './PageCollector.js';
-import {NetworkCollector, PageCollector} from './PageCollector.js';
+import {NetworkCollector, ConsoleCollector} from './PageCollector.js';
 import {Locator} from './third_party/index.js';
 import type {
   Browser,
@@ -24,12 +28,13 @@ import type {
 import {listPages} from './tools/pages.js';
 import {takeSnapshot} from './tools/snapshot.js';
 import {CLOSE_PAGE_ERROR} from './tools/ToolDefinition.js';
-import type {Context} from './tools/ToolDefinition.js';
+import type {Context, DevToolsData} from './tools/ToolDefinition.js';
 import type {TraceResult} from './trace-processing/parse.js';
 import {WaitForHelper} from './WaitForHelper.js';
 
 export interface TextSnapshotNode extends SerializedAXNode {
   id: string;
+  backendNodeId?: number;
   children: TextSnapshotNode[];
 }
 
@@ -37,6 +42,18 @@ export interface TextSnapshot {
   root: TextSnapshotNode;
   idToNode: Map<string, TextSnapshotNode>;
   snapshotId: string;
+  selectedElementUid?: string;
+  // It might happen that there is a selected element, but it is not part of the
+  // snapshot. This flag indicates if there is any selected element.
+  hasSelectedElement: boolean;
+  verbose: boolean;
+}
+
+interface McpContextOptions {
+  // Whether the DevTools windows are exposed as pages for debugging of DevTools.
+  experimentalDevToolsDebugging: boolean;
+  // Whether all page-like targets are exposed as pages.
+  experimentalIncludeAllPages?: boolean;
 }
 
 const DEFAULT_TIMEOUT = 5_000;
@@ -77,11 +94,12 @@ export class McpContext implements Context {
 
   // The most recent page state.
   #pages: Page[] = [];
-  #selectedPageIdx = 0;
+  #pageToDevToolsPage = new Map<Page, Page>();
+  #selectedPage?: Page;
   // The most recent snapshot.
   #textSnapshot: TextSnapshot | null = null;
   #networkCollector: NetworkCollector;
-  #consoleCollector: PageCollector<ConsoleMessage | Error>;
+  #consoleCollector: ConsoleCollector;
 
   #isRunningTrace = false;
   #networkConditionsMap = new WeakMap<Page, string>();
@@ -92,19 +110,22 @@ export class McpContext implements Context {
   #traceResults: TraceResult[] = [];
 
   #locatorClass: typeof Locator;
+  #options: McpContextOptions;
 
   private constructor(
     browser: Browser,
     logger: Debugger,
+    options: McpContextOptions,
     locatorClass: typeof Locator,
   ) {
     this.browser = browser;
     this.logger = logger;
     this.#locatorClass = locatorClass;
+    this.#options = options;
 
     this.#networkCollector = new NetworkCollector(this.browser);
 
-    this.#consoleCollector = new PageCollector(this.browser, collect => {
+    this.#consoleCollector = new ConsoleCollector(this.browser, collect => {
       return {
         console: event => {
           collect(event);
@@ -118,26 +139,74 @@ export class McpContext implements Context {
             collect(error);
           }
         },
+        issue: event => {
+          collect(event);
+        },
       } as ListenerMap;
     });
   }
 
   async #init() {
-    await this.createPagesSnapshot();
-    this.setSelectedPageIdx(0);
-    await this.#networkCollector.init();
-    await this.#consoleCollector.init();
+    const pages = await this.createPagesSnapshot();
+    await this.#networkCollector.init(pages);
+    await this.#consoleCollector.init(pages);
+  }
+
+  dispose() {
+    this.#networkCollector.dispose();
+    this.#consoleCollector.dispose();
   }
 
   static async from(
     browser: Browser,
     logger: Debugger,
+    opts: McpContextOptions,
     /* Let tests use unbundled Locator class to avoid overly strict checks within puppeteer that fail when mixing bundled and unbundled class instances */
     locatorClass: typeof Locator = Locator,
   ) {
-    const context = new McpContext(browser, logger, locatorClass);
+    const context = new McpContext(browser, logger, opts, locatorClass);
     await context.#init();
     return context;
+  }
+
+  resolveCdpRequestId(cdpRequestId: string): number | undefined {
+    const selectedPage = this.getSelectedPage();
+    if (!cdpRequestId) {
+      this.logger('no network request');
+      return;
+    }
+    const request = this.#networkCollector.find(selectedPage, request => {
+      // @ts-expect-error id is internal.
+      return request.id === cdpRequestId;
+    });
+    if (!request) {
+      this.logger('no network request for ' + cdpRequestId);
+      return;
+    }
+    return this.#networkCollector.getIdForResource(request);
+  }
+
+  resolveCdpElementId(cdpBackendNodeId: number): string | undefined {
+    if (!cdpBackendNodeId) {
+      this.logger('no cdpBackendNodeId');
+      return;
+    }
+    if (this.#textSnapshot === null) {
+      this.logger('no text snapshot');
+      return;
+    }
+    // TODO: index by backendNodeId instead.
+    const queue = [this.#textSnapshot.root];
+    while (queue.length) {
+      const current = queue.pop()!;
+      if (current.backendNodeId === cdpBackendNodeId) {
+        return current.id;
+      }
+      for (const child of current.children) {
+        queue.push(child);
+      }
+    }
+    return;
   }
 
   getNetworkRequests(includePreservedRequests?: boolean): HTTPRequest[] {
@@ -147,23 +216,25 @@ export class McpContext implements Context {
 
   getConsoleData(
     includePreservedMessages?: boolean,
-  ): Array<ConsoleMessage | Error> {
+  ): Array<ConsoleMessage | Error | AggregatedIssue> {
     const page = this.getSelectedPage();
     return this.#consoleCollector.getData(page, includePreservedMessages);
   }
 
-  getConsoleMessageStableId(message: ConsoleMessage | Error): number {
+  getConsoleMessageStableId(
+    message: ConsoleMessage | Error | AggregatedIssue,
+  ): number {
     return this.#consoleCollector.getIdForResource(message);
   }
 
-  getConsoleMessageById(id: number): ConsoleMessage | Error {
+  getConsoleMessageById(id: number): ConsoleMessage | Error | AggregatedIssue {
     return this.#consoleCollector.getById(this.getSelectedPage(), id);
   }
 
   async newPage(): Promise<Page> {
     const page = await this.browser.newPage();
-    const pages = await this.createPagesSnapshot();
-    this.setSelectedPageIdx(pages.indexOf(page));
+    await this.createPagesSnapshot();
+    this.selectPage(page);
     this.#networkCollector.addPage(page);
     this.#consoleCollector.addPage(page);
     return page;
@@ -173,7 +244,6 @@ export class McpContext implements Context {
       throw new Error(CLOSE_PAGE_ERROR);
     }
     const page = this.getPageByIdx(pageIdx);
-    this.setSelectedPageIdx(0);
     await page.close({runBeforeUnload: false});
   }
 
@@ -224,7 +294,7 @@ export class McpContext implements Context {
   }
 
   getSelectedPage(): Page {
-    const page = this.#pages[this.#selectedPageIdx];
+    const page = this.#selectedPage;
     if (!page) {
       throw new Error('No page selected');
     }
@@ -245,19 +315,20 @@ export class McpContext implements Context {
     return page;
   }
 
-  getSelectedPageIdx(): number {
-    return this.#selectedPageIdx;
-  }
-
   #dialogHandler = (dialog: Dialog): void => {
     this.#dialog = dialog;
   };
 
-  setSelectedPageIdx(idx: number): void {
-    const oldPage = this.getSelectedPage();
-    oldPage.off('dialog', this.#dialogHandler);
-    this.#selectedPageIdx = idx;
-    const newPage = this.getSelectedPage();
+  isPageSelected(page: Page): boolean {
+    return this.#selectedPage === page;
+  }
+
+  selectPage(newPage: Page): void {
+    const oldPage = this.#selectedPage;
+    if (oldPage) {
+      oldPage.off('dialog', this.#dialogHandler);
+    }
+    this.#selectedPage = newPage;
     newPage.on('dialog', this.#dialogHandler);
     this.#updateSelectedPageTimeouts();
   }
@@ -315,18 +386,112 @@ export class McpContext implements Context {
    * Creates a snapshot of the pages.
    */
   async createPagesSnapshot(): Promise<Page[]> {
-    this.#pages = await this.browser.pages();
+    const allPages = await this.browser.pages(
+      this.#options.experimentalIncludeAllPages,
+    );
+
+    this.#pages = allPages.filter(page => {
+      // If we allow debugging DevTools windows, return all pages.
+      // If we are in regular mode, the user should only see non-DevTools page.
+      return (
+        this.#options.experimentalDevToolsDebugging ||
+        !page.url().startsWith('devtools://')
+      );
+    });
+
+    if (
+      (!this.#selectedPage || this.#pages.indexOf(this.#selectedPage) === -1) &&
+      this.#pages[0]
+    ) {
+      this.selectPage(this.#pages[0]);
+    }
+
+    await this.detectOpenDevToolsWindows();
+
     return this.#pages;
+  }
+
+  async detectOpenDevToolsWindows() {
+    this.logger('Detecting open DevTools windows');
+    const pages = await this.browser.pages(
+      this.#options.experimentalIncludeAllPages,
+    );
+    this.#pageToDevToolsPage = new Map<Page, Page>();
+    for (const devToolsPage of pages) {
+      if (devToolsPage.url().startsWith('devtools://')) {
+        try {
+          this.logger('Calling getTargetInfo for ' + devToolsPage.url());
+          const data = await devToolsPage
+            // @ts-expect-error no types for _client().
+            ._client()
+            .send('Target.getTargetInfo');
+          const devtoolsPageTitle = data.targetInfo.title;
+          const urlLike = extractUrlLikeFromDevToolsTitle(devtoolsPageTitle);
+          if (!urlLike) {
+            continue;
+          }
+          // TODO: lookup without a loop.
+          for (const page of this.#pages) {
+            if (urlsEqual(page.url(), urlLike)) {
+              this.#pageToDevToolsPage.set(page, devToolsPage);
+            }
+          }
+        } catch (error) {
+          this.logger('Issue occurred while trying to find DevTools', error);
+        }
+      }
+    }
   }
 
   getPages(): Page[] {
     return this.#pages;
   }
 
+  getDevToolsPage(page: Page): Page | undefined {
+    return this.#pageToDevToolsPage.get(page);
+  }
+
+  async getDevToolsData(): Promise<DevToolsData> {
+    try {
+      this.logger('Getting DevTools UI data');
+      const selectedPage = this.getSelectedPage();
+      const devtoolsPage = this.getDevToolsPage(selectedPage);
+      if (!devtoolsPage) {
+        this.logger('No DevTools page detected');
+        return {};
+      }
+      const {cdpRequestId, cdpBackendNodeId} = await devtoolsPage.evaluate(
+        async () => {
+          // @ts-expect-error no types
+          const UI = await import('/bundled/ui/legacy/legacy.js');
+          // @ts-expect-error no types
+          const SDK = await import('/bundled/core/sdk/sdk.js');
+          const request = UI.Context.Context.instance().flavor(
+            SDK.NetworkRequest.NetworkRequest,
+          );
+          const node = UI.Context.Context.instance().flavor(
+            SDK.DOMModel.DOMNode,
+          );
+          return {
+            cdpRequestId: request?.requestId(),
+            cdpBackendNodeId: node?.backendNodeId(),
+          };
+        },
+      );
+      return {cdpBackendNodeId, cdpRequestId};
+    } catch (err) {
+      this.logger('error getting devtools data', err);
+    }
+    return {};
+  }
+
   /**
    * Creates a text snapshot of a page.
    */
-  async createTextSnapshot(verbose = false): Promise<void> {
+  async createTextSnapshot(
+    verbose = false,
+    devtoolsData: DevToolsData | undefined = undefined,
+  ): Promise<void> {
     const page = this.getSelectedPage();
     const rootNode = await page.accessibility.snapshot({
       includeIframes: true,
@@ -368,7 +533,16 @@ export class McpContext implements Context {
       root: rootNodeWithId,
       snapshotId: String(snapshotId),
       idToNode,
+      hasSelectedElement: false,
+      verbose,
     };
+    const data = devtoolsData ?? (await this.getDevToolsData());
+    if (data?.cdpBackendNodeId) {
+      this.#textSnapshot.hasSelectedElement = true;
+      this.#textSnapshot.selectedElementUid = this.resolveCdpElementId(
+        data?.cdpBackendNodeId,
+      );
+    }
   }
 
   getTextSnapshot(): TextSnapshot | null {
@@ -443,17 +617,11 @@ export class McpContext implements Context {
     return this.#networkCollector.getIdForResource(request);
   }
 
-  waitForTextOnPage({
-    text,
-    timeout,
-  }: {
-    text: string;
-    timeout?: number | undefined;
-  }): Promise<Element> {
+  waitForTextOnPage(text: string, timeout?: number): Promise<Element> {
     const page = this.getSelectedPage();
     const frames = page.frames();
 
-    const locator = this.#locatorClass.race(
+    let locator = this.#locatorClass.race(
       frames.flatMap(frame => [
         frame.locator(`aria/${text}`),
         frame.locator(`text/${text}`),
@@ -461,7 +629,7 @@ export class McpContext implements Context {
     );
 
     if (timeout) {
-      locator.setTimeout(timeout);
+      locator = locator.setTimeout(timeout);
     }
 
     return locator.wait();
@@ -481,6 +649,6 @@ export class McpContext implements Context {
         },
       } as ListenerMap;
     });
-    await this.#networkCollector.init();
+    await this.#networkCollector.init(await this.browser.pages());
   }
 }
