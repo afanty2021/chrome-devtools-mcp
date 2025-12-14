@@ -5,18 +5,17 @@
  */
 
 import assert from 'node:assert';
-import {afterEach, before, beforeEach, describe, it} from 'node:test';
+import {before, describe, it} from 'node:test';
 
-import {AggregatedIssue} from '../../node_modules/chrome-devtools-frontend/mcp/mcp.js';
-import {setIssuesEnabled} from '../../src/features.js';
 import {loadIssueDescriptions} from '../../src/issue-descriptions.js';
 import {McpResponse} from '../../src/McpResponse.js';
+import {DevTools} from '../../src/third_party/index.js';
 import {
   getConsoleMessage,
   listConsoleMessages,
 } from '../../src/tools/console.js';
 import {serverHooks} from '../server.js';
-import {withMcpContext} from '../utils.js';
+import {getTextContent, withMcpContext} from '../utils.js';
 
 describe('console', () => {
   before(async () => {
@@ -38,10 +37,8 @@ describe('console', () => {
         );
         await listConsoleMessages.handler({params: {}}, response, context);
         const formattedResponse = await response.handle('test', context);
-        const textContent = formattedResponse[0] as {text: string};
-        assert.ok(
-          textContent.text.includes('msgid=1 [error] This is an error'),
-        );
+        const textContent = getTextContent(formattedResponse[0]);
+        assert.ok(textContent.includes('msgid=1 [error] This is an error'));
       });
     });
 
@@ -51,20 +48,12 @@ describe('console', () => {
         await page.setContent('<script>throw undefined;</script>');
         await listConsoleMessages.handler({params: {}}, response, context);
         const formattedResponse = await response.handle('test', context);
-        const textContent = formattedResponse[0] as {text: string};
-        assert.ok(
-          textContent.text.includes('msgid=1 [error] undefined (0 args)'),
-        );
+        const textContent = getTextContent(formattedResponse[0]);
+        assert.ok(textContent.includes('msgid=1 [error] undefined (0 args)'));
       });
     });
 
     describe('issues', () => {
-      beforeEach(() => {
-        setIssuesEnabled(true);
-      });
-      afterEach(() => {
-        setIssuesEnabled(false);
-      });
       it('lists issues', async () => {
         await withMcpContext(async (response, context) => {
           const page = await context.newPage();
@@ -77,9 +66,9 @@ describe('console', () => {
           await issuePromise;
           await listConsoleMessages.handler({params: {}}, response, context);
           const formattedResponse = await response.handle('test', context);
-          const textContent = formattedResponse[0] as {text: string};
+          const textContent = getTextContent(formattedResponse[0]);
           assert.ok(
-            textContent.text.includes(
+            textContent.includes(
               `msgid=1 [issue] An element doesn't have an autocomplete attribute (count: 1)`,
             ),
           );
@@ -100,9 +89,9 @@ describe('console', () => {
           await listConsoleMessages.handler({params: {}}, response, context);
           {
             const formattedResponse = await response.handle('test', context);
-            const textContent = formattedResponse[0] as {text: string};
+            const textContent = getTextContent(formattedResponse[0]);
             assert.ok(
-              textContent.text.includes(
+              textContent.includes(
                 `msgid=1 [issue] An element doesn't have an autocomplete attribute (count: 1)`,
               ),
             );
@@ -118,9 +107,9 @@ describe('console', () => {
           await anotherIssuePromise;
           {
             const formattedResponse = await response.handle('test', context);
-            const textContent = formattedResponse[0] as {text: string};
+            const textContent = getTextContent(formattedResponse[0]);
             assert.ok(
-              textContent.text.includes(
+              textContent.includes(
                 `msgid=2 [issue] An element doesn't have an autocomplete attribute (count: 1)`,
               ),
             );
@@ -145,9 +134,9 @@ describe('console', () => {
           context,
         );
         const formattedResponse = await response.handle('test', context);
-        const textContent = formattedResponse[0] as {text: string};
+        const textContent = getTextContent(formattedResponse[0]);
         assert.ok(
-          textContent.text.includes('msgid=1 [error] This is an error'),
+          textContent.includes('msgid=1 [error] This is an error'),
           'Should contain console message body',
         );
       });
@@ -155,12 +144,6 @@ describe('console', () => {
 
     describe('issues type', () => {
       const server = serverHooks();
-      beforeEach(() => {
-        setIssuesEnabled(true);
-      });
-      afterEach(() => {
-        setIssuesEnabled(false);
-      });
 
       it('gets issue details with node id parsing', async t => {
         await withMcpContext(async (response, context) => {
@@ -181,7 +164,7 @@ describe('console', () => {
             context,
           );
           const formattedResponse = await response2.handle('test', context);
-          t.assert.snapshot?.(formattedResponse[0].text);
+          t.assert.snapshot?.(getTextContent(formattedResponse[0]));
         });
       });
       it('gets issue details with request id parsing', async t => {
@@ -216,7 +199,7 @@ describe('console', () => {
           const messages = context.getConsoleData();
           let issueMsg;
           for (const message of messages) {
-            if (message instanceof AggregatedIssue) {
+            if (message instanceof DevTools.AggregatedIssue) {
               issueMsg = message;
               break;
             }
@@ -236,7 +219,7 @@ describe('console', () => {
             context,
           );
           const formattedResponse = await response2.handle('test', context);
-          const rawText = formattedResponse[0].text as string;
+          const rawText = getTextContent(formattedResponse[0]);
           const sanitizedText = rawText
             .replaceAll(/ID: \d+/g, 'ID: <ID>')
             .replaceAll(/reqid=\d+/g, 'reqid=<reqid>')

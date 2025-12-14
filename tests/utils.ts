@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import logger from 'debug';
 import type {Browser} from 'puppeteer';
 import puppeteer, {Locator} from 'puppeteer';
@@ -16,10 +17,29 @@ import type {
 } from 'puppeteer-core';
 import sinon from 'sinon';
 
-import {AggregatedIssue} from '../node_modules/chrome-devtools-frontend/mcp/mcp.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpResponse} from '../src/McpResponse.js';
 import {stableIdSymbol} from '../src/PageCollector.js';
+import {DevTools} from '../src/third_party/index.js';
+
+export function getTextContent(
+  content: CallToolResult['content'][number],
+): string {
+  if (content.type === 'text') {
+    return content.text;
+  }
+  throw new Error(`Expected text content but got ${content.type}`);
+}
+
+export function getImageContent(content: CallToolResult['content'][number]): {
+  data: string;
+  mimeType: string;
+} {
+  if (content.type === 'image') {
+    return {data: content.data, mimeType: content.mimeType};
+  }
+  throw new Error(`Expected image content but got ${content.type}`);
+}
 
 const browsers = new Map<string, Browser>();
 let context: McpContext | undefined;
@@ -194,8 +214,10 @@ export function stabilizeResponseOutput(text: unknown) {
   return output;
 }
 
-export function getMockAggregatedIssue(): sinon.SinonStubbedInstance<AggregatedIssue> {
-  const mockAggregatedIssue = sinon.createStubInstance(AggregatedIssue);
+export function getMockAggregatedIssue(): sinon.SinonStubbedInstance<DevTools.AggregatedIssue> {
+  const mockAggregatedIssue = sinon.createStubInstance(
+    DevTools.AggregatedIssue,
+  );
   mockAggregatedIssue.getAllIssues.returns([]);
   return mockAggregatedIssue;
 }

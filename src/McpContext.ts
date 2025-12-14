@@ -8,12 +8,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {type AggregatedIssue} from '../node_modules/chrome-devtools-frontend/mcp/mcp.js';
-
 import {extractUrlLikeFromDevToolsTitle, urlsEqual} from './DevtoolsUtils.js';
 import type {ListenerMap} from './PageCollector.js';
 import {NetworkCollector, ConsoleCollector} from './PageCollector.js';
 import {Locator} from './third_party/index.js';
+import type {DevTools} from './third_party/index.js';
 import type {
   Browser,
   ConsoleMessage,
@@ -36,6 +35,11 @@ export interface TextSnapshotNode extends SerializedAXNode {
   id: string;
   backendNodeId?: number;
   children: TextSnapshotNode[];
+}
+
+export interface GeolocationOptions {
+  latitude: number;
+  longitude: number;
 }
 
 export interface TextSnapshot {
@@ -104,6 +108,7 @@ export class McpContext implements Context {
   #isRunningTrace = false;
   #networkConditionsMap = new WeakMap<Page, string>();
   #cpuThrottlingRateMap = new WeakMap<Page, number>();
+  #geolocationMap = new WeakMap<Page, GeolocationOptions>();
   #dialog?: Dialog;
 
   #nextSnapshotId = 1;
@@ -216,18 +221,20 @@ export class McpContext implements Context {
 
   getConsoleData(
     includePreservedMessages?: boolean,
-  ): Array<ConsoleMessage | Error | AggregatedIssue> {
+  ): Array<ConsoleMessage | Error | DevTools.AggregatedIssue> {
     const page = this.getSelectedPage();
     return this.#consoleCollector.getData(page, includePreservedMessages);
   }
 
   getConsoleMessageStableId(
-    message: ConsoleMessage | Error | AggregatedIssue,
+    message: ConsoleMessage | Error | DevTools.AggregatedIssue,
   ): number {
     return this.#consoleCollector.getIdForResource(message);
   }
 
-  getConsoleMessageById(id: number): ConsoleMessage | Error | AggregatedIssue {
+  getConsoleMessageById(
+    id: number,
+  ): ConsoleMessage | Error | DevTools.AggregatedIssue {
     return this.#consoleCollector.getById(this.getSelectedPage(), id);
   }
 
@@ -275,6 +282,20 @@ export class McpContext implements Context {
   getCpuThrottlingRate(): number {
     const page = this.getSelectedPage();
     return this.#cpuThrottlingRateMap.get(page) ?? 1;
+  }
+
+  setGeolocation(geolocation: GeolocationOptions | null): void {
+    const page = this.getSelectedPage();
+    if (geolocation === null) {
+      this.#geolocationMap.delete(page);
+    } else {
+      this.#geolocationMap.set(page, geolocation);
+    }
+  }
+
+  getGeolocation(): GeolocationOptions | null {
+    const page = this.getSelectedPage();
+    return this.#geolocationMap.get(page) ?? null;
   }
 
   setIsRunningPerformanceTrace(x: boolean): void {
@@ -327,10 +348,16 @@ export class McpContext implements Context {
     const oldPage = this.#selectedPage;
     if (oldPage) {
       oldPage.off('dialog', this.#dialogHandler);
+      void oldPage.emulateFocusedPage(false).catch(error => {
+        this.logger('Error turning off focused page emulation', error);
+      });
     }
     this.#selectedPage = newPage;
     newPage.on('dialog', this.#dialogHandler);
     this.#updateSelectedPageTimeouts();
+    void newPage.emulateFocusedPage(true).catch(error => {
+      this.logger('Error turning on focused page emulation', error);
+    });
   }
 
   #updateSelectedPageTimeouts() {
