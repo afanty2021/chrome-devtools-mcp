@@ -5,7 +5,7 @@
  */
 
 import assert from 'node:assert';
-import {beforeEach, describe, it} from 'node:test';
+import {afterEach, beforeEach, describe, it} from 'node:test';
 
 import type {Frame, HTTPRequest, Target, Protocol} from 'puppeteer-core';
 import sinon from 'sinon';
@@ -284,6 +284,29 @@ describe('NetworkCollector', () => {
     page.emit('request', request);
     assert.equal(collector.getData(page, true).length, 3);
   });
+
+  it('should not grow beyond maxNavigationSaved', async () => {
+    const browser = getMockBrowser();
+    const page = (await browser.pages())[0];
+    const mainFrame = page.mainFrame();
+    const collector = new NetworkCollector(browser);
+    await collector.init([page]);
+
+    // Simulate 5 navigations (maxNavigationSaved is 3)
+    for (let i = 0; i < 5; i++) {
+      const req = getMockRequest({
+        url: `http://example.com/nav${i}`,
+        navigationRequest: true,
+        frame: mainFrame,
+      });
+      page.emit('request', req);
+      page.emit('framenavigated', mainFrame);
+    }
+
+    // We expect 3 arrays in navigations (current + 2 saved)
+    // Each navigation has 1 request, so total should be 3
+    assert.equal(collector.getData(page, true).length, 3);
+  });
 });
 
 describe('ConsoleCollector', () => {
@@ -300,6 +323,10 @@ describe('ConsoleCollector', () => {
         },
       },
     };
+  });
+
+  afterEach(() => {
+    sinon.restore();
   });
 
   it('emits issues on page', async () => {
@@ -381,5 +408,38 @@ describe('ConsoleCollector', () => {
     assert(collectedIssue instanceof DevTools.AggregatedIssue);
     assert.equal(collectedIssue.code(), 'MixedContentIssue');
     assert.equal(collectedIssue.getAggregatedIssuesCount(), 1);
+  });
+
+  it('emits UncaughtErrors for Runtime.exceptionThrown CDP events', async () => {
+    const browser = getMockBrowser();
+    const page = (await browser.pages())[0];
+    // @ts-expect-error internal API.
+    const cdpSession = page._client();
+    const onUncaughtErrorListener = sinon.spy();
+    const collector = new ConsoleCollector(browser, () => {
+      return {
+        uncaughtError: onUncaughtErrorListener,
+      } as ListenerMap;
+    });
+    await collector.init([page]);
+
+    cdpSession.emit('Runtime.exceptionThrown', {
+      exceptionDetails: {
+        exception: {description: 'SyntaxError: Expected {'},
+        text: 'Uncaught',
+        stackTrace: {callFrames: []},
+      },
+    });
+
+    sinon.assert.calledOnceWithMatch(
+      onUncaughtErrorListener,
+      sinon.match(e => {
+        return (
+          e.details.exception.description === 'SyntaxError: Expected {',
+          e.details.text === 'Uncaught',
+          e.details.stackTrace.callFrames.length === 0
+        );
+      }),
+    );
   });
 });

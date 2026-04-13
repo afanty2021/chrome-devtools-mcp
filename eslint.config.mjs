@@ -14,7 +14,12 @@ import tseslint from 'typescript-eslint';
 import localPlugin from './scripts/eslint_rules/local-plugin.js';
 
 export default defineConfig([
-  globalIgnores(['**/node_modules', '**/build/']),
+  globalIgnores([
+    '**/node_modules',
+    '**/build/',
+    'tests/tools/fixtures/',
+    'src/third_party/lighthouse-devtools-mcp-bundle.js',
+  ]),
   importPlugin.flatConfigs.typescript,
   {
     languageOptions: {
@@ -32,6 +37,7 @@ export default defineConfig([
             'puppeteer.config.cjs',
             'eslint.config.mjs',
             'rollup.config.mjs',
+            'skills/memory-leak-debugging/references/compare_snapshots.js',
           ],
         },
       },
@@ -60,6 +66,7 @@ export default defineConfig([
     name: 'TypeScript rules',
     rules: {
       '@local/check-license': 'error',
+      curly: ['error', 'all'],
 
       'no-undef': 'off',
       'no-unused-vars': 'off',
@@ -126,6 +133,20 @@ export default defineConfig([
           ],
         },
       ],
+    },
+  },
+  {
+    name: 'Source files',
+    files: ['src/**/*.ts'],
+    rules: {
+      '@local/no-direct-third-party-imports': 'error',
+    },
+  },
+  {
+    name: 'Tools definitions',
+    files: ['src/tools/**/*.ts'],
+    rules: {
+      '@local/enforce-zod-schema': 'error',
     },
   },
   {

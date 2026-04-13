@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import assert from 'node:assert';
+import {spawn} from 'node:child_process';
+import path from 'node:path';
+
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import logger from 'debug';
 import type {Browser} from 'puppeteer';
@@ -17,6 +21,7 @@ import type {
 } from 'puppeteer-core';
 import sinon from 'sinon';
 
+import type {ParsedArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpResponse} from '../src/McpResponse.js';
 import {stableIdSymbol} from '../src/PageCollector.js';
@@ -41,20 +46,36 @@ export function getImageContent(content: CallToolResult['content'][number]): {
   throw new Error(`Expected image content but got ${content.type}`);
 }
 
+export function extractExtensionId(response: McpResponse) {
+  const responseLine = response.responseLines[0];
+  assert.ok(responseLine, 'Response should not be empty');
+  const match = responseLine.match(/Extension installed\. Id: (.+)/);
+  const extensionId = match ? match[1] : null;
+  assert.ok(extensionId, 'Response should contain a valid key');
+  return extensionId;
+}
+
 const browsers = new Map<string, Browser>();
 let context: McpContext | undefined;
 
 export async function withBrowser(
   cb: (browser: Browser, page: Page) => Promise<void>,
-  options: {debug?: boolean; autoOpenDevTools?: boolean} = {},
+  options: {
+    debug?: boolean;
+    autoOpenDevTools?: boolean;
+    executablePath?: string;
+  } = {},
 ) {
   const launchOptions: LaunchOptions = {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+    executablePath:
+      options.executablePath ?? process.env.PUPPETEER_EXECUTABLE_PATH,
     headless: !options.debug,
     defaultViewport: null,
     devtools: options.autoOpenDevTools ?? false,
     pipe: true,
     handleDevToolsAsPage: true,
+    args: ['--screen-info={3840x2160}'],
+    enableExtensions: true,
   };
   const key = JSON.stringify(launchOptions);
 
@@ -78,10 +99,16 @@ export async function withBrowser(
 
 export async function withMcpContext(
   cb: (response: McpResponse, context: McpContext) => Promise<void>,
-  options: {debug?: boolean; autoOpenDevTools?: boolean} = {},
+  options: {
+    debug?: boolean;
+    autoOpenDevTools?: boolean;
+    performanceCrux?: boolean;
+    executablePath?: string;
+  } = {},
+  args: ParsedArguments = {} as ParsedArguments,
 ) {
   await withBrowser(async browser => {
-    const response = new McpResponse();
+    const response = new McpResponse(args);
     if (context) {
       context.dispose();
     }
@@ -90,9 +117,12 @@ export async function withMcpContext(
       logger('test'),
       {
         experimentalDevToolsDebugging: false,
+        performanceCrux: options.performanceCrux ?? true,
       },
       Locator,
     );
+
+    response.setPage(context.getSelectedMcpPage());
 
     await cb(response, context);
   }, options);
@@ -100,6 +130,7 @@ export async function withMcpContext(
 
 export function getMockRequest(
   options: {
+    url?: string;
     method?: string;
     response?: HTTPResponse;
     failure?: HTTPRequest['failure'];
@@ -110,11 +141,12 @@ export function getMockRequest(
     stableId?: number;
     navigationRequest?: boolean;
     frame?: Frame;
+    redirectChain?: HTTPRequest[];
   } = {},
 ): HTTPRequest {
   return {
     url() {
-      return 'http://example.com';
+      return options.url ?? 'http://example.com';
     },
     method() {
       return options.method ?? 'GET';
@@ -143,7 +175,7 @@ export function getMockRequest(
       };
     },
     redirectChain(): HTTPRequest[] {
-      return [];
+      return options.redirectChain ?? [];
     },
     isNavigationRequest() {
       return options.navigationRequest ?? false;
@@ -163,6 +195,9 @@ export function getMockResponse(
   return {
     status() {
       return options.status ?? 200;
+    },
+    headers(): Record<string, string> {
+      return {};
     },
   } as HTTPResponse;
 }
@@ -188,6 +223,27 @@ export function html(
 </html>`;
 }
 
+export function stabilizeStructuredContent(content: unknown): unknown {
+  if (typeof content === 'string') {
+    return stabilizeResponseOutput(content);
+  }
+  if (Array.isArray(content)) {
+    return content.map(item => stabilizeStructuredContent(item));
+  }
+  if (typeof content === 'object' && content !== null) {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(content)) {
+      if (key === 'snapshotFilePath' && typeof value === 'string') {
+        result[key] = '<file>';
+      } else {
+        result[key] = stabilizeStructuredContent(value);
+      }
+    }
+    return result;
+  }
+  return content;
+}
+
 export function stabilizeResponseOutput(text: unknown) {
   if (typeof text !== 'string') {
     throw new Error('Input must be string');
@@ -211,6 +267,10 @@ export function stabilizeResponseOutput(text: unknown) {
 
   const savedSnapshot = /Saved snapshot to (.*)/g;
   output = output.replaceAll(savedSnapshot, 'Saved snapshot to <file>');
+
+  const acceptLanguageRegEx = /accept-language:.*\n/g;
+  output = output.replaceAll(acceptLanguageRegEx, 'accept-language:<lang>\n');
+
   return output;
 }
 
@@ -250,6 +310,7 @@ export function getMockPage(): Page {
     send: () => {
       // no-op
     },
+    target: () => ({_targetId: '<mock target ID>'}),
   };
   return {
     mainFrame() {
@@ -271,4 +332,42 @@ export function getMockBrowser(): Browser {
     },
     ...mockListener(),
   } as Browser;
+}
+
+export const CLI_PATH = path.resolve('build/src/bin/chrome-devtools.js');
+
+export async function runCli(
+  args: string[],
+): Promise<{status: number | null; stdout: string; stderr: string}> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [CLI_PATH, ...args]);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', chunk => {
+      stdout += chunk;
+      process.stdout.write(chunk);
+    });
+    child.stderr.on('data', chunk => {
+      stderr += chunk;
+      process.stderr.write(chunk);
+    });
+    child.on('close', status => resolve({status, stdout, stderr}));
+    child.on('error', reject);
+  });
+}
+
+export async function assertDaemonIsNotRunning() {
+  const result = await runCli(['status']);
+  assert.strictEqual(
+    result.stdout,
+    'chrome-devtools-mcp daemon is not running.\n',
+  );
+}
+
+export async function assertDaemonIsRunning() {
+  const result = await runCli(['status']);
+  assert.ok(
+    result.stdout.startsWith('chrome-devtools-mcp daemon is running.\n'),
+    'chrome-devtools-mcp daemon is not running',
+  );
 }

@@ -6,6 +6,7 @@
 
 import {logger} from './logger.js';
 import type {Page, Protocol, CdpPage} from './third_party/index.js';
+import type {PredefinedNetworkConditions} from './third_party/index.js';
 
 export class WaitForHelper {
   #abortController = new AbortController();
@@ -125,12 +126,13 @@ export class WaitForHelper {
 
   async waitForEventsAfterAction(
     action: () => Promise<unknown>,
+    options?: {timeout?: number},
   ): Promise<void> {
     const navigationFinished = this.waitForNavigationStarted()
       .then(navigationStated => {
         if (navigationStated) {
           return this.#page.waitForNavigation({
-            timeout: this.#navigationTimeout,
+            timeout: options?.timeout ?? this.#navigationTimeout,
             signal: this.#abortController.signal,
           });
         }
@@ -158,4 +160,23 @@ export class WaitForHelper {
       this.#abortController.abort();
     }
   }
+}
+
+export function getNetworkMultiplierFromString(
+  condition: string | null,
+): number {
+  const puppeteerCondition =
+    condition as keyof typeof PredefinedNetworkConditions;
+
+  switch (puppeteerCondition) {
+    case 'Fast 4G':
+      return 1;
+    case 'Slow 4G':
+      return 2.5;
+    case 'Fast 3G':
+      return 5;
+    case 'Slow 3G':
+      return 10;
+  }
+  return 1;
 }
