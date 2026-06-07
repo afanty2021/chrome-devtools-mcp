@@ -1,11 +1,12 @@
-# Chrome DevTools MCP
+# Chrome DevTools for agents
 
 [![npm chrome-devtools-mcp package](https://img.shields.io/npm/v/chrome-devtools-mcp.svg)](https://npmjs.org/package/chrome-devtools-mcp)
 
-`chrome-devtools-mcp` lets your coding agent (such as Gemini, Claude, Cursor or Copilot)
+Chrome DevTools for agents (`chrome-devtools-mcp`) lets your coding agent (such as Antigravity, Claude, Cursor or Copilot)
 control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of
 Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
+A [CLI](docs/cli.md) is also provided for use without MCP.
 
 ## [Tool reference](./docs/tool-reference.md) | [Changelog](./CHANGELOG.md) | [Contributing](./CONTRIBUTING.md) | [Troubleshooting](./docs/troubleshooting.md) | [Design Principles](./docs/design-principles.md)
 
@@ -60,7 +61,7 @@ You can disable these update checks by setting the `CHROME_DEVTOOLS_MCP_NO_UPDAT
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) v20.19 or a newer [latest maintenance LTS](https://github.com/nodejs/Release#release-schedule) version.
+- [Node.js](https://nodejs.org/) [LTS](https://github.com/nodejs/Release#release-schedule) version.
 - [Chrome](https://www.google.com/chrome/) current stable version or newer.
 - [npm](https://www.npmjs.com/)
 
@@ -160,7 +161,7 @@ To install Chrome DevTools MCP with skills, add the marketplace registry in Clau
 Then, install the plugin:
 
 ```sh
-/plugin install chrome-devtools-mcp
+/plugin install chrome-devtools-mcp@chrome-devtools-plugins
 ```
 
 Restart Claude Code to have the MCP server and skills load (check with `/skills`).
@@ -248,7 +249,7 @@ and the expert guidance it needs to use them effectively.
 
 1.  Open the **Command Palette** (`Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on Windows/Linux).
 2.  Search for and run the **Chat: Install Plugin From Source** command.
-3.  Paste in our repository URL: `https://github.com/ChromeDevTools/chrome-devtools-mcp`
+3.  Paste in our repository name: `ChromeDevTools/chrome-devtools-mcp`.
 
 That's it! Your agent is now supercharged with Chrome DevTools capabilities.
 
@@ -476,7 +477,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 
 <!-- BEGIN AUTO GENERATED TOOLS -->
 
-- **Input automation** (9 tools)
+- **Input automation** (10 tools)
   - [`click`](docs/tool-reference.md#click)
   - [`drag`](docs/tool-reference.md#drag)
   - [`fill`](docs/tool-reference.md#fill)
@@ -486,6 +487,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`press_key`](docs/tool-reference.md#press_key)
   - [`type_text`](docs/tool-reference.md#type_text)
   - [`upload_file`](docs/tool-reference.md#upload_file)
+  - [`click_at`](docs/tool-reference.md#click_at)
 - **Navigation automation** (6 tools)
   - [`close_page`](docs/tool-reference.md#close_page)
   - [`list_pages`](docs/tool-reference.md#list_pages)
@@ -496,21 +498,41 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Emulation** (2 tools)
   - [`emulate`](docs/tool-reference.md#emulate)
   - [`resize_page`](docs/tool-reference.md#resize_page)
-- **Performance** (4 tools)
+- **Performance** (3 tools)
   - [`performance_analyze_insight`](docs/tool-reference.md#performance_analyze_insight)
   - [`performance_start_trace`](docs/tool-reference.md#performance_start_trace)
   - [`performance_stop_trace`](docs/tool-reference.md#performance_stop_trace)
-  - [`take_memory_snapshot`](docs/tool-reference.md#take_memory_snapshot)
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Debugging** (6 tools)
+- **Debugging** (8 tools)
   - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
   - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`lighthouse_audit`](docs/tool-reference.md#lighthouse_audit)
   - [`list_console_messages`](docs/tool-reference.md#list_console_messages)
   - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
+  - [`screencast_start`](docs/tool-reference.md#screencast_start)
+  - [`screencast_stop`](docs/tool-reference.md#screencast_stop)
+- **Memory** (6 tools)
+  - [`take_heapsnapshot`](docs/tool-reference.md#take_heapsnapshot)
+  - [`close_heapsnapshot`](docs/tool-reference.md#close_heapsnapshot)
+  - [`get_heapsnapshot_class_nodes`](docs/tool-reference.md#get_heapsnapshot_class_nodes)
+  - [`get_heapsnapshot_details`](docs/tool-reference.md#get_heapsnapshot_details)
+  - [`get_heapsnapshot_retainers`](docs/tool-reference.md#get_heapsnapshot_retainers)
+  - [`get_heapsnapshot_summary`](docs/tool-reference.md#get_heapsnapshot_summary)
+- **Extensions** (5 tools)
+  - [`install_extension`](docs/tool-reference.md#install_extension)
+  - [`list_extensions`](docs/tool-reference.md#list_extensions)
+  - [`reload_extension`](docs/tool-reference.md#reload_extension)
+  - [`trigger_extension_action`](docs/tool-reference.md#trigger_extension_action)
+  - [`uninstall_extension`](docs/tool-reference.md#uninstall_extension)
+- **Third-party** (2 tools)
+  - [`execute_3p_developer_tool`](docs/tool-reference.md#execute_3p_developer_tool)
+  - [`list_3p_developer_tools`](docs/tool-reference.md#list_3p_developer_tools)
+- **WebMCP** (2 tools)
+  - [`execute_webmcp_tool`](docs/tool-reference.md#execute_webmcp_tool)
+  - [`list_webmcp_tools`](docs/tool-reference.md#list_webmcp_tools)
 
 <!-- END AUTO GENERATED TOOLS -->
 
@@ -557,7 +579,7 @@ The Chrome DevTools MCP server supports the following configuration option:
 - **`--channel`**
   Specify a different Chrome channel that should be used. The default is the stable channel version.
   - **Type:** string
-  - **Choices:** `stable`, `canary`, `beta`, `dev`
+  - **Choices:** `canary`, `dev`, `beta`, `stable`
 
 - **`--logFile`/ `--log-file`**
   Path to a file to write debug logs to. Set the env variable `DEBUG` to `*` to enable verbose logs. Useful for submitting bug reports.
@@ -575,12 +597,40 @@ The Chrome DevTools MCP server supports the following configuration option:
   If enabled, ignores errors relative to self-signed and expired certificates. Use with caution.
   - **Type:** boolean
 
+- **`--experimentalPageIdRouting`/ `--experimental-page-id-routing`**
+  Whether to expose pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions).
+  - **Type:** boolean
+
+- **`--experimentalDevtools`/ `--experimental-devtools`**
+  Whether to enable automation over DevTools targets
+  - **Type:** boolean
+
 - **`--experimentalVision`/ `--experimental-vision`**
   Whether to enable coordinate-based tools such as click_at(x,y). Usually requires a computer-use model able to produce accurate coordinates by looking at screenshots.
   - **Type:** boolean
 
+- **`--memoryDebugging`/ `--memory-debugging`, `-experimentalMemory`**
+  Whether to enable memory debugging tools.
+  - **Type:** boolean
+
+- **`--experimentalStructuredContent`/ `--experimental-structured-content`**
+  Whether to output structured formatted content.
+  - **Type:** boolean
+
+- **`--experimentalIncludeAllPages`/ `--experimental-include-all-pages`**
+  Whether to include all kinds of pages such as webviews or background pages as pages.
+  - **Type:** boolean
+
 - **`--experimentalScreencast`/ `--experimental-screencast`**
   Exposes experimental screencast tools (requires ffmpeg). Install ffmpeg https://www.ffmpeg.org/download.html and ensure it is available in the MCP server PATH.
+  - **Type:** boolean
+
+- **`--experimentalFfmpegPath`/ `--experimental-ffmpeg-path`**
+  Path to ffmpeg executable for screencast recording.
+  - **Type:** string
+
+- **`--categoryExperimentalWebmcp`/ `--category-experimental-webmcp`**
+  Set to true to enable debugging WebMCP tools. Requires Chrome 149+ with the following flags: `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`
   - **Type:** boolean
 
 - **`--chromeArg`/ `--chrome-arg`**
@@ -606,6 +656,16 @@ The Chrome DevTools MCP server supports the following configuration option:
   - **Type:** boolean
   - **Default:** `true`
 
+- **`--categoryExtensions`/ `--category-extensions`**
+  Set to true to include tools related to extensions. Note: This feature is currently only supported with a pipe connection. autoConnect, browserUrl, and wsEndpoint are not supported with this feature until 149 will be released.
+  - **Type:** boolean
+  - **Default:** `false`
+
+- **`--categoryExperimentalThirdParty`/ `--category-experimental-third-party`**
+  Set to true to enable third-party developer tools exposed by the inspected page itself
+  - **Type:** boolean
+  - **Default:** `false`
+
 - **`--performanceCrux`/ `--performance-crux`**
   Set to false to disable sending URLs from performance traces to CrUX API to get field performance data.
   - **Type:** boolean
@@ -619,6 +679,11 @@ The Chrome DevTools MCP server supports the following configuration option:
 - **`--slim`**
   Exposes a "slim" set of 3 tools covering navigation, script execution and screenshots only. Useful for basic browser tasks.
   - **Type:** boolean
+
+- **`--redactNetworkHeaders`/ `--redact-network-headers`**
+  If true, redacts some of the network headers considered sensitive before returning to the client.
+  - **Type:** boolean
+  - **Default:** `false`
 
 <!-- END AUTO GENERATED OPTIONS -->
 
@@ -664,6 +729,34 @@ To get the WebSocket endpoint from a running Chrome instance, visit `http://127.
 You can also run `npx chrome-devtools-mcp@latest --help` to see all available configuration options.
 
 ## Concepts
+
+### Concurrent sessions
+
+Most MCP clients start one Chrome DevTools MCP server per conversation. If your
+client shares a single server instance across concurrent agents or subagents,
+start the server with `--experimentalPageIdRouting`. This exposes `pageId` on
+page-scoped tools so each agent can route tool calls to the tab it is working
+with.
+
+```json
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--experimentalPageIdRouting"
+      ]
+    }
+  }
+}
+```
+
+If you run multiple independent MCP client sessions and want each session to
+launch its own temporary Chrome profile, also pass `--isolated`. This avoids
+sharing the default Chrome DevTools MCP user data directory between those
+server instances.
 
 ### User data directory
 

@@ -50,6 +50,8 @@ export const screenshot = definePageTool({
         'The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.',
       ),
   },
+  blockedByDialog: true,
+  verifyFilesSchema: ['filePath'],
   handler: async (request, response, context) => {
     if (request.params.uid && request.params.fullPage) {
       throw new Error('Providing both "uid" and "fullPage" is not allowed.');
@@ -87,8 +89,12 @@ export const screenshot = definePageTool({
     }
 
     if (request.params.filePath) {
-      const file = await context.saveFile(screenshot, request.params.filePath);
-      response.appendResponseLine(`Saved screenshot to ${file.filename}.`);
+      const result = await context.saveFile(
+        screenshot,
+        request.params.filePath,
+        `.${format}`,
+      );
+      response.appendResponseLine(`Saved screenshot to ${result.filename}.`);
     } else if (screenshot.length >= 2_000_000) {
       const {filepath} = await context.saveTemporaryFile(
         screenshot,
