@@ -305,5 +305,21 @@
   {
     "name": "memory_debugging",
     "flagType": "boolean"
+  },
+  {
+    "name": "blocked_url_pattern_present",
+    "flagType": "boolean"
+  },
+  {
+    "name": "allowed_url_pattern_present",
+    "flagType": "boolean"
+  },
+  {
+    "name": "experimental_toon_format_present",
+    "flagType": "boolean"
+  },
+  {
+    "name": "experimental_toon_format",
+    "flagType": "boolean"
   }
 ]

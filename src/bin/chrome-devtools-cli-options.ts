@@ -360,6 +360,37 @@ export const commands: Commands = {
       },
     },
   },
+  get_heapsnapshot_edges: {
+    description:
+      'Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get outgoing edges for.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
   get_heapsnapshot_retainers: {
     description:
       'Loads a memory heapsnapshot and returns retainers for a specific node ID. (requires flag: --memoryDebugging=true)',
@@ -387,6 +418,43 @@ export const commands: Commands = {
         name: 'pageSize',
         type: 'number',
         description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_retaining_paths: {
+    description:
+      'Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get retaining paths for.',
+        required: true,
+      },
+      maxDepth: {
+        name: 'maxDepth',
+        type: 'number',
+        description: 'The maximum depth to search for retaining paths.',
+        required: false,
+      },
+      maxNodes: {
+        name: 'maxNodes',
+        type: 'number',
+        description: 'The maximum number of nodes to return.',
+        required: false,
+      },
+      maxSiblings: {
+        name: 'maxSiblings',
+        type: 'number',
+        description: 'The maximum number of siblings to return.',
         required: false,
       },
     },
@@ -554,6 +622,13 @@ export const commands: Commands = {
           'Set to true to return the preserved messages over the last 3 navigations.',
         required: false,
         default: false,
+      },
+      serviceWorkerId: {
+        name: 'serviceWorkerId',
+        type: 'string',
+        description:
+          'Filter messages to only return messages of the specified service worker.',
+        required: false,
       },
     },
   },

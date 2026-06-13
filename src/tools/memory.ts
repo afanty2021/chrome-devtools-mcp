@@ -183,3 +183,73 @@ export const closeHeapSnapshot = defineTool({
     );
   },
 });
+
+export const getHeapSnapshotRetainingPaths = defineTool({
+  name: 'get_heapsnapshot_retaining_paths',
+  description:
+    'Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected.',
+  annotations: {
+    category: ToolCategory.MEMORY,
+    readOnlyHint: true,
+    conditions: ['memoryDebugging'],
+  },
+  verifyFilesSchema: ['filePath'],
+  blockedByDialog: false,
+  schema: {
+    filePath: zod.string().describe('A path to a .heapsnapshot file to read.'),
+    nodeId: zod.number().describe('The node ID to get retaining paths for.'),
+    maxDepth: zod
+      .number()
+      .optional()
+      .describe('The maximum depth to search for retaining paths.'),
+    maxNodes: zod
+      .number()
+      .optional()
+      .describe('The maximum number of nodes to return.'),
+    maxSiblings: zod
+      .number()
+      .optional()
+      .describe('The maximum number of siblings to return.'),
+  },
+  handler: async (request, response, context) => {
+    const retainingPaths = await context.getHeapSnapshotRetainingPaths(
+      request.params.filePath,
+      request.params.nodeId,
+      request.params.maxDepth,
+      request.params.maxNodes,
+      request.params.maxSiblings,
+    );
+
+    response.setHeapSnapshotRetainingPaths(retainingPaths);
+  },
+});
+
+export const getHeapSnapshotEdges = defineTool({
+  name: 'get_heapsnapshot_edges',
+  description:
+    'Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID.',
+  annotations: {
+    category: ToolCategory.MEMORY,
+    readOnlyHint: true,
+    conditions: ['memoryDebugging'],
+  },
+  blockedByDialog: false,
+  verifyFilesSchema: ['filePath'],
+  schema: {
+    filePath: zod.string().describe('A path to a .heapsnapshot file to read.'),
+    nodeId: zod.number().describe('The node ID to get outgoing edges for.'),
+    pageIdx: zod.number().optional().describe('The page index for pagination.'),
+    pageSize: zod.number().optional().describe('The page size for pagination.'),
+  },
+  handler: async (request, response, context) => {
+    const edges = await context.getHeapSnapshotEdges(
+      request.params.filePath,
+      request.params.nodeId,
+    );
+
+    response.setHeapSnapshotNodes(edges, {
+      pageIdx: request.params.pageIdx,
+      pageSize: request.params.pageSize,
+    });
+  },
+});
